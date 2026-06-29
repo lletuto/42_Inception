@@ -1,0 +1,84 @@
+services:
+  mariadb:
+    image: mariadb
+    build: ${BUILD_PATH}/mariadb
+    container_name: mariadb
+    networks:
+      - inception
+    env_file:
+      - .env
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    secrets:
+      - mdb_psd
+      - mdb_root_psd
+    restart: always
+    healthcheck:
+      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p$$(cat /run/secrets/mdb_root_psd)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  wordpress:
+    image: wordpress
+    build: ${BUILD_PATH}/wordpress
+    container_name: wordpress
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - inception
+    secrets:
+      - user_psd
+      - wp_admin_psd
+      - mdb_psd
+    restart: always
+
+  nginx:
+    image: nginx
+    build: ${BUILD_PATH}/nginx
+    container_name: nginx
+    env_file:
+      - .env
+    volumes:
+      - wordpress_data:/var/www/html
+    ports:
+      - "${PORT}:443"
+    depends_on:
+      - wordpress
+    networks:
+      - inception
+    restart: always
+
+networks:
+  inception :
+    driver: bridge
+
+volumes:
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: /home/lle-tuto/data/mariadb
+      o: bind
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /home/lle-tuto/data/wordpress
+
+secrets:
+  mdb_psd:
+    file: /home/lle-tuto/Inception/secrets/mdb_psd.txt
+  mdb_root_psd:
+    file: /home/lle-tuto/Inception/secrets/mdb_root_psd.txt
+  user_psd:
+    file: /home/lle-tuto/Inception/secrets/user_psd.txt
+  wp_admin_psd:
+    file: /home/lle-tuto/Inception/secrets/wp_admin_psd.txt
